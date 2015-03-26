@@ -282,13 +282,13 @@ setMethod(f="plot",
                       if (zr[2] > 0) {
                           water.z <- pretty(c(zr[1], 0))
                           water.z <- water.z[water.z!=0]
-                                        #cat("water.z=");print(water.z)
+                          ##cat("water.z=");print(water.z)
                           ## Do some tricks to get shelf water as well as deep
                           if (max(water.z) == -1000)
                               water.z <- c(water.z, -500, -250, -100, -50)
                           else if (max(water.z) == -500)
                               water.z <- c(water.z, -400, -300, -200, -150, -100, -50)
-                                        #cat("after tricks, water.z=");print(water.z)
+                          ##cat("after tricks, water.z=");print(water.z)
                       } else {
                           water.z <- pretty(zr)
                       }

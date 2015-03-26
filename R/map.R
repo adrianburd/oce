@@ -296,9 +296,15 @@ mapPlot <- function(longitude, latitude, longitudelim, latitudelim, grid=TRUE,
     drawGrid <- (is.logical(grid[1]) && grid[1]) || (is.numeric(grid[1]) && grid[1] > 0)
     if (is.logical(grid[1]) && grid[1])
         grid <- rep(15, 2)
-    xy <- lonlat2map(longitude, latitude, projection=projection, parameters=parameters, orientation=orientation)
-    if (!missing(latitudelim) && 0 == diff(latitudelim)) stop("lattudelim must contain two distinct values")
-    if (!missing(longitudelim) && 0 == diff(longitudelim)) stop("longitudelim must contain two distinct values")
+    if (isTopo) {
+        xy <- lonlat2map(range(longitude), range(latitude), projection=projection, parameters=parameters, orientation=orientation)
+    } else {
+        xy <- lonlat2map(longitude, latitude, projection=projection, parameters=parameters, orientation=orientation)
+    }
+    if (!missing(latitudelim) && 0 == diff(latitudelim))
+        stop("lattudelim must contain two distinct values")
+    if (!missing(longitudelim) && 0 == diff(longitudelim))
+        stop("longitudelim must contain two distinct values")
     limitsGiven <- !missing(latitudelim) && !missing(longitudelim)
     x <- xy$x
     xrange <- range(x, na.rm=TRUE)
@@ -313,40 +319,39 @@ mapPlot <- function(longitude, latitude, longitudelim, latitudelim, grid=TRUE,
     yorig <- y
     ## FIXME: maybe *always* do this.
     ## FIXME: maybe *skip Antarctica*.
-    if (usingProj4() ||
-        projection %in% c('mollweide', 'polyconic')) { ## kludge trim wild points [github issue 227]
-        ## FIXME: below is a kludge to avoid weird horiz lines; it
-        ## FIXME: would be better to complete the polygons, so they 
-        ## FIXME: can be filled.  It might be smart to do this in C
-        d <- c(0, sqrt(diff(x)^2 + diff(y)^2))
-        d[!is.finite(d)] <- 0          # FIXME: ok?
-        ##dc <- as.numeric(quantile(d, 1-100*(1/3/length(x)), na.rm=TRUE)) # FIXME: criterion
-        ##bad <- d > dc
-        ##bad <- 0.1 < (d / diff(range(x, na.rm=TRUE)))
-        antarctic <- latitude < -60
-        bad <- ((d / diff(range(x, na.rm=TRUE))) > 0.1) & !antarctic
-        ## FIXME: this should finish off polygons, but that is a bit tricky, e.g.
-        ## FIXME: should we create a series of points to a trace along the edge 
-        ## FIXME: the visible earth?
-        if (debug > 0 && sum(bad))    # FIXME should be debug>0
-            warning("mapPlot(): trimming ", sum(bad), " spurious edge-to-edge lines; filling may be inaccurate", call.=FALSE)
-        x[bad] <- NA                       
-        y[bad] <- NA
-    }
+    if (!isTopo) {
+        if (usingProj4() || projection %in% c('mollweide', 'polyconic')) {
+            ## kludge trim wild points [github issue 227]
+            ## FIXME: below is a kludge to avoid weird horiz lines; it
+            ## FIXME: would be better to complete the polygons, so they 
+            ## FIXME: can be filled.  It might be smart to do this in C
+            d <- c(0, sqrt(diff(x)^2 + diff(y)^2))
+            d[!is.finite(d)] <- 0          # FIXME: ok?
+            ##dc <- as.numeric(quantile(d, 1-100*(1/3/length(x)), na.rm=TRUE)) # FIXME: criterion
+            ##bad <- d > dc
+            ##bad <- 0.1 < (d / diff(range(x, na.rm=TRUE)))
+            antarctic <- latitude < -60
+            bad <- ((d / diff(range(x, na.rm=TRUE))) > 0.1) & !antarctic
+            ## FIXME: this should finish off polygons, but that is a bit tricky, e.g.
+            ## FIXME: should we create a series of points to a trace along the edge 
+            ## FIXME: the visible earth?
+            if (debug > 0 && sum(bad))    # FIXME should be debug>0
+                warning("mapPlot(): trimming ", sum(bad), " spurious edge-to-edge lines; filling may be inaccurate", call.=FALSE)
+            x[bad] <- NA                       
+            y[bad] <- NA
+        }
 
-    bad2 <- !is.finite(x) | !is.finite(y)
-    x[bad2] <- NA
-    y[bad2] <- NA
+        bad2 <- !is.finite(x) | !is.finite(y)
+        x[bad2] <- NA
+        y[bad2] <- NA
+    }
 
     dotnames <- names(dots)
     if ("xlim" %in% dotnames || "ylim" %in% dotnames || "xaxs" %in% dotnames || "yaxs" %in% dotnames) {
         ## for issue 539, i.e. repeated scales
-        #cat("Case 1\n")
         plot(x, y, type=type, xlab="", ylab="", asp=1, axes=FALSE, ...)
     } else {
-        #cat("Case 2\n")
         if (limitsGiven) {
-            #cat("Case 2A\n")
             ## transform so can do e.g. latlim=c(70, 110) to centre on pole
             ##message("latitudelim: ", paste(latitudelim, collapse=" "))
             ##message("longitudelim: ", paste(longitudelim, collapse=" "))
@@ -370,15 +375,59 @@ mapPlot <- function(longitude, latitude, longitudelim, latitudelim, grid=TRUE,
                  xlab="", ylab="", asp=1, axes=FALSE, ...)
             ## points(jitter(box$x), jitter(box$y), pch=1, col='red')
         } else {
-            #cat("Case 2B\n")
             if (isTopo) {
-                #print(list(...))
-                cat("should plot topo now")
                 plot(x, y, type='n', xlab="", ylab="", asp=1, axes=FALSE, ...)
-                contours <- contourLines(longitude, latitude, z)
-                for (contour in contours) {
-                    xy <- lonlat2map(contour$x, contour$y, projection=projection, parameters=parameters, orientation=orientation)
-                    lines(xy$x, xy$y)
+                dots <- list(...)
+                dotsNames <- names(dots)
+                zr <- range(z)
+                if ("land.z" %in% dotsNames) {
+                    land.z <- dots$land.z
+                } else {
+                    if (zr[1] < 0) {
+                        land.z <- pretty(c(0, zr[2]))
+                        land.z <- land.z[land.z!=0]
+                    } else {
+                        land.z <- pretty(zr)
+                    }
+                }
+                message("land.z: ", paste(land.z, collapse=" "), "\n")
+                if ("water.z" %in% dotsNames) {
+                    water.z <- dots$water.z
+                } else {
+                    if (zr[1] < 0) {
+                        water.z <- pretty(c(zr[1], 0))
+                        water.z <- water.z[water.z!=0]
+                        if (max(water.z) == -1000)
+                            water.z <- c(water.z, -500, -250, -100, -50)
+                        else if (max(water.z) == -500)
+                            water.z <- c(water.z, -400, -300, -200, -150, -100, -50)
+                    } else {
+                        water.z <- pretty(zr)
+                    }
+                }
+                message("water.z: ", paste(water.z, collapse=" "), "\n")
+                nz <- length(water.z)
+                col.water <- if ("col.water" %in% dotsNames) dots$col.water else
+                    oce.colorsGebco(nz, "water", "line")
+                ## FIXME lty and lwd for water
+                nz <- length(land.z)
+                col.land <- if ("col.land" %in% dotsNames) dots$col.land else
+                    oce.colorsGebco(nz, "land", "line")
+                warning("topo contours very rudimentary (no control over values, no labels")
+                levels <- c(water.z, land.z)
+                for (i in seq_along(water.z)) {
+                    message("i: ", i, " zz: ", water.z[i], "\n")
+                    C <- contourLines(longitude, latitude, z, levels=water.z[i])
+                    message("length(C) = ", length(C), "\n")
+                    if (length(C)) {
+                        for (cc in seq_along(C)) {
+                            xy <- lonlat2map(C[[cc]]$x, C[[cc]]$y,
+                                             projection=projection,
+                                             parameters=parameters,
+                                             orientation=orientation)
+                            lines(xy$x, xy$y, col=col.water[i])
+                        }
+                    }
                 }
             } else {
                 plot(x, y, type=type, xlab="", ylab="", asp=1, axes=FALSE, ...)
