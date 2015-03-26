@@ -415,6 +415,20 @@ mapPlot <- function(longitude, latitude, longitudelim, latitudelim, grid=TRUE,
                     oce.colorsGebco(nz, "land", "line")
                 warning("topo contours very rudimentary (no control over values, no labels")
                 levels <- c(water.z, land.z)
+                for (i in seq_along(land.z)) {
+                    message("i: ", i, " zz: ", land.z[i], "\n")
+                    C <- contourLines(longitude, latitude, z, levels=land.z[i])
+                    message("length(C) = ", length(C), "\n")
+                    if (length(C)) {
+                        for (cc in seq_along(C)) {
+                            xy <- lonlat2map(C[[cc]]$x, C[[cc]]$y,
+                                             projection=projection,
+                                             parameters=parameters,
+                                             orientation=orientation)
+                            lines(xy$x, xy$y, col=col.land[i])
+                        }
+                    }
+                }
                 for (i in seq_along(water.z)) {
                     message("i: ", i, " zz: ", water.z[i], "\n")
                     C <- contourLines(longitude, latitude, z, levels=water.z[i])
@@ -427,6 +441,18 @@ mapPlot <- function(longitude, latitude, longitudelim, latitudelim, grid=TRUE,
                                              orientation=orientation)
                             lines(xy$x, xy$y, col=col.water[i])
                         }
+                    }
+                }
+                ## coastline
+                C <- contourLines(longitude, latitude, z, levels=0)
+                message("length(C) = ", length(C), "\n")
+                if (length(C)) {
+                    for (cc in seq_along(C)) {
+                        xy <- lonlat2map(C[[cc]]$x, C[[cc]]$y,
+                                         projection=projection,
+                                         parameters=parameters,
+                                         orientation=orientation)
+                        lines(xy$x, xy$y)
                     }
                 }
             } else {
