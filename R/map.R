@@ -276,6 +276,14 @@ mapPlot <- function(longitude, latitude, longitudelim, latitudelim, grid=TRUE,
         data("coastlineWorld", envir=environment())
         longitude <- get("coastlineWorld")
     }
+    isTopo <- FALSE
+    if (inherits(longitude, "topo")) {
+        isTopo <- TRUE
+        topo <- longitude
+        longitude <- topo[["longitude"]]
+        latitude <- topo[["latitude"]]
+        z <- topo[["z"]]
+    }
     if ("data" %in% slotNames(longitude) && # handle e.g. 'coastline' class
         2 == sum(c("longitude","latitude") %in% names(longitude@data))) {
         latitude <- longitude@data$latitude
@@ -333,9 +341,12 @@ mapPlot <- function(longitude, latitude, longitudelim, latitudelim, grid=TRUE,
     dotnames <- names(dots)
     if ("xlim" %in% dotnames || "ylim" %in% dotnames || "xaxs" %in% dotnames || "yaxs" %in% dotnames) {
         ## for issue 539, i.e. repeated scales
+        #cat("Case 1\n")
         plot(x, y, type=type, xlab="", ylab="", asp=1, axes=FALSE, ...)
     } else {
+        #cat("Case 2\n")
         if (limitsGiven) {
+            #cat("Case 2A\n")
             ## transform so can do e.g. latlim=c(70, 110) to centre on pole
             ##message("latitudelim: ", paste(latitudelim, collapse=" "))
             ##message("longitudelim: ", paste(longitudelim, collapse=" "))
@@ -359,8 +370,19 @@ mapPlot <- function(longitude, latitude, longitudelim, latitudelim, grid=TRUE,
                  xlab="", ylab="", asp=1, axes=FALSE, ...)
             ## points(jitter(box$x), jitter(box$y), pch=1, col='red')
         } else {
-            plot(x, y, type=type,
-                 xlab="", ylab="", asp=1, axes=FALSE, ...)
+            #cat("Case 2B\n")
+            if (isTopo) {
+                #print(list(...))
+                cat("should plot topo now")
+                plot(x, y, type='n', xlab="", ylab="", asp=1, axes=FALSE, ...)
+                contours <- contourLines(longitude, latitude, z)
+                for (contour in contours) {
+                    xy <- lonlat2map(contour$x, contour$y, projection=projection, parameters=parameters, orientation=orientation)
+                    lines(xy$x, xy$y)
+                }
+            } else {
+                plot(x, y, type=type, xlab="", ylab="", asp=1, axes=FALSE, ...)
+            }
         }
     }
     ## Remove any island/lake that is entirely offscale.  This is not a perfect
