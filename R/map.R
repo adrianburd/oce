@@ -388,7 +388,7 @@ mapPlot <- function(longitude, latitude, longitudelim, latitudelim, grid=TRUE,
                         land.z <- pretty(zr)
                     }
                 }
-                message("land.z: ", paste(land.z, collapse=" "), "\n")
+                #message("land.z: ", paste(land.z, collapse=" "), "\n")
                 if ("water.z" %in% dotsNames) {
                     water.z <- dots$water.z
                 } else {
@@ -403,7 +403,7 @@ mapPlot <- function(longitude, latitude, longitudelim, latitudelim, grid=TRUE,
                         water.z <- pretty(zr)
                     }
                 }
-                message("water.z: ", paste(water.z, collapse=" "), "\n")
+                #message("water.z: ", paste(water.z, collapse=" "), "\n")
                 nz <- length(water.z)
                 col.water <- if ("col.water" %in% dotsNames) dots$col.water else
                     oce.colorsGebco(nz, "water", "line")
@@ -414,9 +414,9 @@ mapPlot <- function(longitude, latitude, longitudelim, latitudelim, grid=TRUE,
                 warning("topo contours very rudimentary (no control over values, no labels")
                 levels <- c(water.z, land.z)
                 for (i in seq_along(land.z)) {
-                    message("i: ", i, " zz: ", land.z[i], "\n")
+                    #message("i: ", i, " zz: ", land.z[i], "\n")
                     C <- contourLines(longitude, latitude, z, levels=land.z[i])
-                    message("length(C) = ", length(C), "\n")
+                    #message("length(C) = ", length(C), "\n")
                     if (length(C)) {
                         for (cc in seq_along(C)) {
                             xy <- lonlat2map(C[[cc]]$x, C[[cc]]$y,
@@ -428,9 +428,9 @@ mapPlot <- function(longitude, latitude, longitudelim, latitudelim, grid=TRUE,
                     }
                 }
                 for (i in seq_along(water.z)) {
-                    message("i: ", i, " zz: ", water.z[i], "\n")
+                    #message("i: ", i, " zz: ", water.z[i], "\n")
                     C <- contourLines(longitude, latitude, z, levels=water.z[i])
-                    message("length(C) = ", length(C), "\n")
+                    #message("length(C) = ", length(C), "\n")
                     if (length(C)) {
                         for (cc in seq_along(C)) {
                             xy <- lonlat2map(C[[cc]]$x, C[[cc]]$y,
@@ -443,7 +443,7 @@ mapPlot <- function(longitude, latitude, longitudelim, latitudelim, grid=TRUE,
                 }
                 ## coastline
                 C <- contourLines(longitude, latitude, z, levels=0)
-                message("length(C) = ", length(C), "\n")
+                #message("length(C) = ", length(C), "\n")
                 if (length(C)) {
                     for (cc in seq_along(C)) {
                         xy <- lonlat2map(C[[cc]]$x, C[[cc]]$y,
@@ -453,6 +453,13 @@ mapPlot <- function(longitude, latitude, longitudelim, latitudelim, grid=TRUE,
                         lines(xy$x, xy$y)
                     }
                 }
+                location <- if ("location" %in% dotsNames) dots$location else "right"
+                zz <- c(water.z, land.z)
+                col <- c(col.water, col.land)
+                o <- order(zz, decreasing=TRUE)
+                zz <- zz[o]
+                col <- col[o]
+                ## don't draw legend yet because grid hasn't been drawn yet
             } else {
                 plot(x, y, type=type, xlab="", ylab="", asp=1, axes=FALSE, ...)
             }
@@ -714,6 +721,8 @@ mapPlot <- function(longitude, latitude, longitudelim, latitudelim, grid=TRUE,
         ## 2014-11-16        if (!is.null(AT) && axes && fractionOfGlobe) axis(side=4, at=AT, labels=fixneg(LAB), tick=TICK, tcl=TCL, mgp=MGP)
         ## 2014-11-16    }
         options(warn=options$warn) 
+        if (isTopo)
+            legend(location, lwd=1, lty=1, bg="white", legend=zz, col=col)
     }
     oceDebug(debug, "} # mapPlot()\n", unindent=1)
 }
