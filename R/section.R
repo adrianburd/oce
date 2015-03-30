@@ -45,7 +45,7 @@ setMethod(f="summary",
 
 
 setMethod(f="[[",
-          signature="section",
+          signature(x="section", i="ANY", j="ANY"),
           definition=function(x, i, j, drop) {
               if (i %in% names(x@metadata)) {
                   if (i %in% c("longitude", "latitude")) {
@@ -186,7 +186,7 @@ setMethod(f="subset",
                   rval <- x
                   if (length(grep("distance", subsetString))) {
                       l <- list(distance=geodDist(rval))
-                      keep <- eval(substitute(subset), l, parent.frame())
+                      keep <- eval(substitute(subset), l, parent.frame(2))
                       rval@metadata$longitude <- rval@metadata$longitude[keep]
                       rval@metadata$latitude <- rval@metadata$latitude[keep]
                       rval@metadata$stationId <- rval@metadata$stationId[keep]
@@ -195,7 +195,7 @@ setMethod(f="subset",
                       n <- length(x@data$station)
                       keep <- vector(length=n)
                       for (i in 1:n)
-                          keep[i] <- eval(substitute(subset), x@data$station[[i]]@metadata, parent.frame())
+                          keep[i] <- eval(substitute(subset), x@data$station[[i]]@metadata, parent.frame(2))
                       nn <- sum(keep)
                       station <- vector("list", nn)
                       stn <- vector("character", nn)
@@ -222,7 +222,7 @@ setMethod(f="subset",
                       rval@processingLog <- x@processingLog
                   } else {
                       n <- length(x@data$station)
-                      r <- eval(substitute(subset), x@data$station[[1]]@data, parent.frame())
+                      r <- eval(substitute(subset), x@data$station[[1]]@data, parent.frame(2))
                       for (i in 1:n) {
                           rval@data$station[[i]]@data <- x@data$station[[i]]@data[r,]
                       }
@@ -339,13 +339,12 @@ makeSection <- function(item, ...)
     res
 }
 
-"+.section" <- function(section, station)
+#"+.section" <- function(section, station) # up until 2015-03-13
+sectionAddStation <- function(section, station)
 {
     if (missing(station)) return(section) # not sure this can happen
-    if (!inherits(section, "section"))
-        stop("'section' is not a section")
-    if (!inherits(station, "ctd"))
-        stop("'station' is not a station")
+    if (!inherits(section, "section")) stop("'section' is not a 'section' object")
+    if (!inherits(station, "ctd")) stop("'station' is not a 'ctd' object")
     res <- section
     n.orig <- length(section@data$station)
     s <- vector("list", n.orig + 1)
@@ -359,12 +358,13 @@ makeSection <- function(item, ...)
     res@processingLog <- processingLog(res@processingLog, paste(deparse(match.call()), sep="", collapse=""))
     res
 }
+sectionAddCtd <- sectionAddStation
 
 setMethod(f="plot",
           signature=signature("section"),
           definition=function(x,
                               which=c(1, 2, 3, 99),
-                              eos=getOption("eos", default='unesco'),
+                              eos=getOption("oceEOS", default="gsw"),
                               at=NULL,
                               labels=TRUE,
                               grid=FALSE,
@@ -403,10 +403,10 @@ setMethod(f="plot",
               ## Make 'which' be numeric, to simplify following code
               ##oceDebug(debug, "which=c(", paste(which, collapse=","), ")\n")
               lw <- length(which)
-              which <- ocePmatch(which,
-                                 list(temperature=1, salinity=2, 
-                                      sigmaTheta=3, nitrate=4, nitrite=5, oxygen=6,
-                                      phosphate=7, silicate=8, data=20, map=99))
+              which <- oce.pmatch(which,
+                                  list(temperature=1, salinity=2, 
+                                       sigmaTheta=3, nitrate=4, nitrite=5, oxygen=6,
+                                       phosphate=7, silicate=8, data=20, map=99))
               ##oceDebug(debug, "which=c(", paste(which, collapse=","), ")\n")
 
 
@@ -443,7 +443,7 @@ setMethod(f="plot",
 
 
               plotSubsection <- function(variable="temperature", vtitle="T",
-                                         eos=getOption("eos", default='unesco'),
+                                         eos=getOption("oceEOS", default="gsw"),
                                          indicate.stations=TRUE, contourLevels=NULL, contourLabels=NULL,
                                          xlim=NULL,
                                          ylim=NULL,
@@ -480,7 +480,7 @@ setMethod(f="plot",
                       haveCoastline <- FALSE
                       if (!is.character(coastline)) 
                           stop("coastline must be a character string")
-                      haveOcedata <- require("ocedata", quietly=TRUE)
+                      haveOcedata <- requireNamespace("ocedata", quietly=TRUE)
                       if (coastline == "best") {
                           if (haveOcedata) {
                               bestcoastline <- coastlineBest(lonRange=lonr, latRange=latr)
@@ -603,7 +603,7 @@ setMethod(f="plot",
                           }
                           nbreaks <- length(zbreaks)
                           if (is.null(zcol)) 
-                              zcol <- oceColorsJet(nbreaks - 1)
+                              zcol <- oce.colorsJet(nbreaks - 1)
                           if (is.function(zcol))
                               zcol <- zcol(nbreaks - 1)
                           zlim <- range(zbreaks)

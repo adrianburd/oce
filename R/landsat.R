@@ -58,8 +58,8 @@ setMethod(f="summary",
           })
 
 
-setMethod(f="[[", # FIXME: ensure working on all the many possibilities, including user-created (not broken by byte??)
-          signature="landsat",
+setMethod(f="[[",
+          signature(x="landsat", i="ANY", j="ANY"),
           definition=function(x, i, j, drop) {
               debug <- getOption("oceDebug")
               oceDebug(debug, "landsat [[ {\n", unindent=1)
@@ -91,6 +91,7 @@ setMethod(f="[[", # FIXME: ensure working on all the many possibilities, includi
                   if (!is.list(x@data$tirs1)) stop("the \"tirs1\" band is not stored in two-byte format")
                   ## First, determine whether decimation is needed.
                   decimate <- 1        # decimation step
+                  emissivity <- if ("emissivity" %in% names(x@metadata)) x@metadata$emissivity else 1
                   dim <- dim(x@data$tirs1$lsb)
                   maxdim <- max(dim)
                   ilook <- seq.int(1L, dim[1], by=1L)
@@ -119,8 +120,10 @@ setMethod(f="[[", # FIXME: ensure working on all the many possibilities, includi
                       oceDebug(debug, "AL=", AL, "# @metadata$header$radiance_add_band_10\n")
                       oceDebug(debug, "K1=", K1, "# @metadata$header$k1_constant_band_10\n")
                       oceDebug(debug, "K2=", K2, "# @metadata$header$k2_constant_band_10\n")
-                      msb <- x@data$tirs1$msb[ilook,jlook]
-                      lsb <- x@data$tirs1$lsb[ilook,jlook]
+                      if (is.matrix(emissivity))
+                          emissivity <- emissivity[ilook, jlook]
+                      msb <- x@data$tirs1$msb[ilook, jlook]
+                      lsb <- x@data$tirs1$lsb[ilook, jlook]
                       dim <- dim(msb)
                       d <- 256L*as.integer(msb) + as.integer(lsb)
                       na <- d == 0
@@ -129,7 +132,7 @@ setMethod(f="[[", # FIXME: ensure working on all the many possibilities, includi
                       ## avoid warnings on the 0 Llambda values (from band gaps)
                       options <- options('warn')
                       options(warn=-1) 
-                      d <- K2 / log(K1 / Llambda + 1)
+                      d <- K2 / log(emissivity * K1 / Llambda + 1)
                       options(warn=options$warn) 
                       d <- d - 273.15
                       d[na] <- NA
@@ -148,7 +151,9 @@ setMethod(f="[[", # FIXME: ensure working on all the many possibilities, includi
                       oceDebug(debug, "K1=", K1, "# Landsat7_Handbook.pdf Table 11.5\n")
                       oceDebug(debug, "K2=", K2, "# Landsat7_Handbook.pdf Table 11.5\n")
                       ## d <- 256L*as.integer(x@data$tirs1$msb) + as.integer(x@data$tirs1$lsb)
-                      d <- x@data$tirs1$lsb[ilook,jlook]
+                      if (is.matrix(emissivity))
+                          emissivity <- emissivity[ilook, jlook]
+                      d <- x@data$tirs1$lsb[ilook, jlook]
                       dim <- dim(d)
                       d <- as.integer(d)
                       na <- d == 0
@@ -157,7 +162,7 @@ setMethod(f="[[", # FIXME: ensure working on all the many possibilities, includi
                       ## avoid warnings on the 0 Llambda values (from band gaps)
                       options <- options('warn')
                       options(warn=-1) 
-                      d <- K2 / log(K1 / Llambda + 1)
+                      d <- K2 / log(emissivity * K1 / Llambda + 1)
                       options(warn=options$warn) 
                       d <- d - 273.15
                       d[na] <- NA
@@ -257,8 +262,8 @@ setMethod(f="[[", # FIXME: ensure working on all the many possibilities, includi
 
 setMethod(f="plot",
           signature=signature("landsat"),
-          definition=function(x, which=1, band, decimate=TRUE, zlim, utm=FALSE,
-                              col=oceColorsPalette,
+          definition=function(x, band, which=1, decimate=TRUE, zlim, utm=FALSE,
+                              col=oce.colorsPalette,
                               showBandName=TRUE,
                               alpha.f=1, red.f=2, green.f=2, blue.f=4,
                               offset=c(0, 0, 0, 0),
@@ -342,6 +347,17 @@ setMethod(f="plot",
                               stop("this landsat object has no band named \"", band, "\"", call.=FALSE)
                           band <- knownBands[i]
                           d <- x[[band, decimate]]
+                          if (!any(!is.na(d))) {
+                              if (band == "temperature") {
+                                  stop("cannot compute landsat temperature; see e.g. http://landsat.usgs.gov/mission_headlines2015.php",
+                                       call.=FALSE)
+                              } else {
+                                  stop("landsat object has only missing values in the \"", band, "\" band", call.=FALSE)
+                              }
+                          }
+                          ##if (0 == sum(d, na.rm=TRUE))
+                          if (all(d == 0))
+                              stop("landsat object has only zero values in the \"", band, "\" band", call.=FALSE)
                           if (is.na(pmatch(band, "temperature")))
                               d[d == 0] <- NA  # only makes sense for count data
                       }
@@ -501,13 +517,13 @@ read.landsatmeta <- function(file, debug=getOption("oceDebug"))
          ##dimThermal=dimThermal)
 }
 
-read.landsat <- function(file, band="all", debug=getOption("oceDebug"))
+read.landsat <- function(file, band="all", emissivity=0.984, debug=getOption("oceDebug"))
 {
     oceDebug(debug, "read.landsat(file=\"", file, "\",",
              if (length(band) > 1) paste("band=c(\"", paste(band, collapse="\",\""), "\")", sep="") else
                  paste("band=\"", band, "\"", sep=""),
                  ", debug=", debug, ") {\n", sep="", unindent=1)
-    if (!require("tiff"))
+    if (!requireNamespace("tiff", quietly=TRUE))
         stop('must install.packages("tiff") to read landsat data')
     rval <- new("landsat")
     actualfilename <- gsub("/$", "", file) # permit e.g. "LE71910202005194ASN00/"
@@ -538,6 +554,7 @@ read.landsat <- function(file, band="all", debug=getOption("oceDebug"))
     rval@metadata <- header
     rval@metadata[["spacecraft"]] <- header$spacecraft
     rval@metadata[["id"]] <- header$id
+    rval@metadata[["emissivity"]] <- emissivity
     rval@metadata[["filename"]] <- file
     rval@metadata[["headerfilename"]] <- headerfilename
     ## Bandnames differ by satellite.

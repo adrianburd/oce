@@ -22,11 +22,11 @@ setMethod(f="subset",
               rval <- x
               if (length(grep("time", subsetString)) ||
                   length(grep("longitude", subsetString)) || length(grep("latitude", subsetString))) {
-                  keep <- eval(substitute(subset), x@data, parent.frame())
+                  keep <- eval(substitute(subset), x@data, parent.frame(2))
               } else if (length(grep("profile", subsetString))) {
                   ## add profile into the data, then do as usual
                   x@data$profile <- 1:length(x@data$time)
-                  keep <- eval(substitute(subset), x@data, parent.frame())
+                  keep <- eval(substitute(subset), x@data, parent.frame(2))
               } else {
                   stop("may only subset by time, longitude, or latitude, and not by combinations")
               }
@@ -107,7 +107,7 @@ drifterGrid <- function(drifter, p, debug=getOption("oceDebug"), ...)
 
 read.drifter <- function(file, debug=getOption("oceDebug"), processingLog, ...)
 {
-    if (!require("ncdf4"))
+    if (!requireNamespace("ncdf4", quietly=TRUE))
         stop('must install.packages("ncdf4") to read drifter data')
     if (missing(processingLog)) processingLog <- paste(deparse(match.call()), sep="", collapse="")
     ofile <- file
@@ -234,27 +234,31 @@ setMethod(f="plot",
               if (missing(level) || level == "all")
                   level <- seq(1L, dim(x@data$temperature)[1])
               ctd <- as.ctd(x@data$salinity, x@data$temperature, x@data$pressure)
-              which <- ocePmatch(which,
-                                 list(trajectory=1,
-                                      "salinity ts"=2,
-                                      "temperature ts"=3,
-                                      "TS"=4,
-                                      "salinity profile"=5,
-                                      "temperature profile"=6))
+              which <- oce.pmatch(which,
+                                  list(trajectory=1,
+                                       "salinity ts"=2,
+                                       "temperature ts"=3,
+                                       "TS"=4,
+                                       "salinity profile"=5,
+                                       "temperature profile"=6))
               for (w in 1:nw) {
                   if (which[w] == 1) {
                       oceDebug(debug, "which[", w, "] ==1, so plotting a map\n")
                       ## map
                       ## FIXME: coastline selection should be DRY
                       haveCoastline <- FALSE
-                      haveOcedata <- require("ocedata", quietly=TRUE)
+                      haveOcedata <- requireNamespace("ocedata", quietly=TRUE)
                       lonr <- range(x[["longitude"]], na.rm=TRUE)
                       latr <- range(x[["latitude"]], na.rm=TRUE)
                       if (coastline == "best") {
                           if (haveOcedata) {
                               bestcoastline <- coastlineBest(lonRange=lonr, latRange=latr)
                               oceDebug(debug, " 'best' coastline is: \"", bestcoastline, '\"\n', sep="")
-                              data(list=bestcoastline, package="ocedata", envir=environment())
+                              if (bestcoastline == "coastlineWorld") {
+                                  data(list=bestcoastline, package="oce", envir=environment())
+                              } else {
+                                  data(list=bestcoastline, package="ocedata", envir=environment())
+                              }
                               coastline <- get(bestcoastline)
                           } else {
                               bestcoastline <- coastlineBest(lonRange=lonr, latRange=latr)
@@ -266,7 +270,7 @@ setMethod(f="plot",
                       } else {
                           if (coastline != "none") {
                               if (coastline == "coastlineWorld") {
-                                  data("coastlineWorld", envir=environment())
+                                  data("coastlineWorld", package="oce", envir=environment())
                                   coastline <- coastlineWorld
                               } else if (haveOcedata && coastline == "coastlineWorldFine") {
                                   data("coastlineWorldFine", package="ocedata", envir=environment())
